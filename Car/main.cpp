@@ -23,7 +23,7 @@ public:
 	{
 		return fuel_level;
 	}
-	Tank(int capacity):CAPACITY(capacity < MIN_TANK_CAPACITY ? MIN_TANK_CAPACITY : capacity > MAX_TANK_CAPACITY ? MAX_TANK_CAPACITY : capacity),fuel_level(0)
+	Tank(int capacity) :CAPACITY(capacity < MIN_TANK_CAPACITY ? MIN_TANK_CAPACITY : capacity > MAX_TANK_CAPACITY ? MAX_TANK_CAPACITY : capacity), fuel_level(0)
 	{
 		cout << "Tank:";
 		if (capacity < MIN_TANK_CAPACITY)cout << "Min capacity was applied" << endl;
@@ -55,8 +55,8 @@ public:
 	}
 	void info()const
 	{
-	cout << "Capacity:\t" << CAPACITY << " liters.\n";
-	cout << "Fuel level:\t" << fuel_level << " liters.\n";
+		cout << "Capacity:\t" << CAPACITY << " liters.\n";
+		cout << "Fuel level:\t" << fuel_level << " liters.\n";
 	}
 };
 
@@ -73,13 +73,13 @@ public:
 	{
 		return consumption_per_second;
 	}
-	Engine(double consumption):CONSUMPTION
+	Engine(double consumption) :CONSUMPTION
 	(
 		consumption < MIN_ENGINE_CONSUMPTION ? MIN_ENGINE_CONSUMPTION :
 		consumption > MAX_ENGINE_CONSUMPTION ? MAX_ENGINE_CONSUMPTION :
 		consumption
 	),
-		DEFAULT_CONSUMPTION_PER_SECOND(CONSUMPTION*3e-5),
+		DEFAULT_CONSUMPTION_PER_SECOND(CONSUMPTION * 3e-5),
 		consumption_per_second(DEFAULT_CONSUMPTION_PER_SECOND)
 	{
 		is_started = false;
@@ -117,15 +117,17 @@ class Car
 	Engine engine;
 	Tank tank;
 	int speed;
+	int acceleration;
 	const int MAX_SPEED;
 	bool driver_inside;
 	struct
 	{
 		std::thread panel_thread;
 		std::thread engine_idle_thread;
+		std::thread free_wheeling_thread;
 	}threads_container; //эта структура не имеет имени, и реализует только один экземпл€р
 public:
-	Car(double consumption, int capacity, int max_speed = 250):MAX_SPEED
+	Car(double consumption, int capacity, int max_speed = 250, int acceleration = 10) :MAX_SPEED
 	(
 		max_speed < MAX_SPEED_LOWER_LIMIT ? MAX_SPEED_LOWER_LIMIT :
 		max_speed > MAX_SPEED_HIGHER_LIMIT ? MAX_SPEED_HIGHER_LIMIT :
@@ -133,10 +135,11 @@ public:
 	),
 		engine(consumption),
 		tank(capacity),
-		speed(0)
+		speed(0),
+		acceleration(acceleration)
 	{
 		driver_inside = false;
-		cout << "Your car is ready to go, press 'Enter' to get in ;)" << endl;
+		cout << "Your car is ready to go, press 'Enter' to get in ;-)" << endl;
 	}
 	~Car()
 	{
@@ -169,11 +172,32 @@ public:
 		if (threads_container.engine_idle_thread.joinable())
 			threads_container.engine_idle_thread.join();
 	}
+	void accelerate()
+	{
+		if (driver_inside && engine.started())
+		{
+			speed += acceleration;
+			if (!threads_container.free_wheeling_thread.joinable())
+				threads_container.free_wheeling_thread = std::thread(&Car::free_wheeling, this);
+			if (speed > MAX_SPEED)speed = MAX_SPEED;
+			std::this_thread::sleep_for(1s);
+		}
+	}
+	void slow_down()
+	{
+		if (driver_inside)
+		{
+			speed -= acceleration;
+			if (speed < 0)speed = 0;
+			std::this_thread::sleep_for(1s);
+		}
+	}
 	void control()
 	{
 		char key = 0;
 		do
 		{
+			key = 0;
 			if (_kbhit())key = _getch();
 			//key = _getch();
 			switch (key)
@@ -189,13 +213,29 @@ public:
 			case 'I':case'i': //Ignition
 				if (driver_inside)!engine.started() ? start() : stop();
 				break;
+			case 'W':case 'w':
+				accelerate();
+				break;
+			case 'S':case 's':
+				slow_down();
+				break;
 			case Escape:
 				stop();
 				get_out();
 			}
 			if (tank.get_fuel_level() <= 0)stop();
+			if (speed <= 0 && threads_container.free_wheeling_thread.joinable())
+				threads_container.free_wheeling_thread.join();
 		} while (key != Escape);
 		//Concurent execution (ќдновременное выполнение)
+	}
+	void free_wheeling()
+	{
+		while (speed-- > 0)
+		{
+			if (speed < 0)speed = 0;
+			std::this_thread::sleep_for(1s);
+		}
 	}
 	void engine_idle()
 	{
@@ -252,7 +292,7 @@ void main()
 	Engine engine(10);
 	engine.info();
 #endif // ENGINE_CHECK
-	
+
 	Car bmw(10, 80, 270);
 	//bmw.info();
 	bmw.control();
